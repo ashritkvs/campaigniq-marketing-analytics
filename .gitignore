@@ -1,0 +1,4 @@
+marketing_data.csv
+marketing_campaign_data*.csv
+__pycache__/
+.venv/
