@@ -10,16 +10,18 @@ Marketing teams need to know **which channels and campaigns actually fund growth
 
 ---
 
-## 🔎 Representative findings (placeholders — run the notebook on your CSV)
+## 🔎 Verified findings (from executing the notebook on the full 200,000-row dataset)
 
-| Metric | Example headline (your run may differ) |
+| Metric | Actual result |
 | --- | --- |
-| Overall ROI | **~420–520%** portfolio ROI (modeled from spend + ROI field) |
-| Best channel (typical) | Often **YouTube** or **Google Ads** on efficiency in this dataset |
-| Reallocation lift (directional) | **+1% to +6%** modeled revenue under efficiency-weighted mix (same total spend) |
-| Segment pockets | **Tech Enthusiasts** / **Health & Wellness** frequently show strong intersections |
+| Dataset scale | **200,000 campaigns** across **6 channels** (Email, Facebook, Google Ads, Instagram, Website, YouTube), **5 campaign types**, **5 customer segments** |
+| Overall ROI | **~5.0%** per channel — tightly clustered (4.99%–5.03% range), not a large spread |
+| Best channel | **Facebook** (5.03% ROI), then Website (5.01%); Instagram lowest (4.99%) |
+| Email vs. Search proxy test | Conversion rates 7.98% vs 8.01%; two-proportion z-test **p = 0.00029** (statistically significant) but **Cohen's h = 0.001** (practically negligible effect size) — significance here is driven by the very large sample (22M+ clicks), not a meaningful real-world difference |
+| Segment ROI | All five segments cluster between 4.998%–5.012% ROI; Foodies highest |
+| Reallocation lift | **+0.00%** — efficiency-weighted budget reallocation finds no meaningful gain, because channel efficiency is already nearly uniform across the dataset |
 
-> These are **illustrative** ranges; execute `CampaignIQ_Analysis.ipynb` locally for exact numbers.
+> These numbers come from actually executing `CampaignIQ_Analysis.ipynb` end-to-end against `marketing_data.csv`, not illustrative placeholders.
 
 ---
 
