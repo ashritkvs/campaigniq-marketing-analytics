@@ -4,6 +4,19 @@
 
 ---
 
+## ⚡ Quick start — run the dashboard
+
+```bash
+git clone https://github.com/ashritkvs/campaigniq-marketing-analytics.git
+cd campaigniq-marketing-analytics
+pip install -r requirements.txt
+streamlit run dashboard.py
+```
+
+This opens automatically in your browser at `http://localhost:8501`. Upload `marketing_data.csv` via the sidebar file uploader to populate it (the raw CSV isn't committed to this repo — bring your own copy or export one matching the schema below).
+
+---
+
 ## 🎯 Business problem
 
 Marketing teams need to know **which channels and campaigns actually fund growth**, not just which ones spend the most. Weak attribution creates three expensive failures: budgets follow habit instead of performance, high-value audiences stay under-invested, and leadership sees activity metrics instead of profit logic. CampaignIQ connects **spend → modeled revenue → ROI → segments → tests → budget scenarios** so decisions are evidence-led and finance-ready.
