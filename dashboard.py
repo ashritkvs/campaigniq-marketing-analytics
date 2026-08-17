@@ -5,8 +5,6 @@ Loads marketing_data.csv (same schema as analysis notebook).
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -71,9 +69,10 @@ def main() -> None:
         page_title="CampaignIQ — Marketing Analytics",
         layout="wide",
         initial_sidebar_state="expanded",
+        page_icon="📊",
     )
 
-    st.title("CampaignIQ — Marketing Analytics Dashboard")
+    st.title("📊 CampaignIQ — Marketing Analytics Dashboard")
     st.caption("Marketing campaign attribution, ROI, and budget optimization")
 
     # ── File uploader ──────────────────────────────────────────────────────────
@@ -91,7 +90,7 @@ def main() -> None:
 
     df = load_marketing_data(uploaded)
 
-    # ── Filters ────────────────────────────────────────────────────────────────
+    # ── Filters (sidebar "slicers") ───────────────────────────────────────────
     with st.sidebar:
         st.header("Filters")
         min_d, max_d = df["Date"].min(), df["Date"].max()
@@ -124,6 +123,14 @@ def main() -> None:
             default=sorted(df["Customer_Segment"].dropna().unique()),
         )
 
+        audiences = None
+        if "Target_Audience" in df.columns:
+            audiences = st.multiselect(
+                "Target audience",
+                options=sorted(df["Target_Audience"].dropna().unique()),
+                default=sorted(df["Target_Audience"].dropna().unique()),
+            )
+
     filt = df[
         (df["Date"] >= d0)
         & (df["Date"] <= d1)
@@ -131,6 +138,8 @@ def main() -> None:
         & (df["Channel_Used"].isin(channels))
         & (df["Customer_Segment"].isin(segments))
     ]
+    if audiences is not None:
+        filt = filt[filt["Target_Audience"].isin(audiences)]
 
     if filt.empty:
         st.warning("No rows match the selected filters.")
@@ -139,114 +148,138 @@ def main() -> None:
     total_spend = float(filt["Spend"].sum())
     total_revenue = float(filt["Revenue"].sum())
     overall_roi = (total_revenue - total_spend) / total_spend * 100 if total_spend > 0 else 0.0
+    total_conversions = float(filt["Conversions"].sum())
+    total_clicks = float(filt["Clicks"].sum())
+    overall_conv_rate = (total_conversions / total_clicks * 100) if total_clicks > 0 else 0.0
     cm = channel_metrics(filt)
     best_channel = (
         cm.sort_values("ROI_pct", ascending=False).iloc[0]["Channel_Used"]
         if not cm.empty else "—"
     )
 
-    # ── Row 1 — KPI cards ──────────────────────────────────────────────────────
-    r1c1, r1c2, r1c3, r1c4 = st.columns(4)
-    r1c1.metric("Total Spend",        f"${total_spend:,.0f}")
-    r1c2.metric("Total Revenue",      f"${total_revenue:,.0f}")
-    r1c3.metric("Overall ROI %",      f"{overall_roi:.1f}%")
-    r1c4.metric("Best Channel (ROI)", best_channel)
+    # ── KPI cards ──────────────────────────────────────────────────────────────
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.metric("Total Spend", f"${total_spend:,.0f}")
+    k2.metric("Total Revenue", f"${total_revenue:,.0f}")
+    k3.metric("Overall ROI %", f"{overall_roi:.2f}%")
+    k4.metric("Conversion Rate", f"{overall_conv_rate:.2f}%")
+    k5.metric("Best Channel", best_channel)
 
-    # ── Row 2 — ROI bar + scatter ──────────────────────────────────────────────
-    cm_sorted = cm.sort_values("ROI_pct", ascending=True)
-    scatter = px.scatter(
-        filt, x="Spend", y="Revenue", size="Conversions", color="Channel_Used",
-        hover_data=["Campaign_Type", "Customer_Segment"],
-        color_discrete_sequence=PALETTE,
-        title="Spend vs Revenue (bubble size = conversions)",
+    st.markdown("---")
+
+    tab_overview, tab_channels, tab_budget = st.tabs(
+        ["📈 Overview", "🎯 Channels & Segments", "💰 Budget Optimization"]
     )
-    scatter.update_layout(height=420, legend_title_text="Channel")
 
-    roi_bar = px.bar(
-        cm_sorted, x="ROI_pct", y="Channel_Used", orientation="h",
-        color="ROI_pct", color_continuous_scale=PALETTE,
-        title="Channel ROI % (Revenue − Spend) / Spend × 100",
-        labels={"ROI_pct": "ROI %", "Channel_Used": "Channel"},
-    )
-    roi_bar.update_layout(height=420, showlegend=False)
+    # ── Tab 1: Overview ──────────────────────────────────────────────────────
+    with tab_overview:
+        st.caption("How spend and revenue are trending, and where campaigns are concentrated.")
 
-    c21, c22 = st.columns(2)
-    with c21:
-        st.plotly_chart(roi_bar, use_container_width=True)
-    with c22:
+        m = filt.assign(month=filt["Date"].dt.to_period("M").dt.to_timestamp())
+        monthly = m.groupby("month", as_index=False).agg(Spend=("Spend", "sum"), Revenue=("Revenue", "sum"))
+        trend = go.Figure()
+        trend.add_trace(go.Scatter(
+            x=monthly["month"], y=monthly["Spend"], name="Spend",
+            line=dict(color=PALETTE[0], width=2), yaxis="y1",
+        ))
+        trend.add_trace(go.Scatter(
+            x=monthly["month"], y=monthly["Revenue"], name="Revenue",
+            line=dict(color=PALETTE[1], width=2), yaxis="y2",
+        ))
+        trend.update_layout(
+            title="Monthly spend vs revenue", height=400,
+            yaxis=dict(title="Spend ($)", side="left", showgrid=False),
+            yaxis2=dict(title="Revenue ($)", overlaying="y", side="right", showgrid=False),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        st.plotly_chart(trend, use_container_width=True)
+
+        scatter = px.scatter(
+            filt, x="Spend", y="Revenue", size="Conversions", color="Channel_Used",
+            hover_data=["Campaign_Type", "Customer_Segment"],
+            color_discrete_sequence=PALETTE,
+            title="Spend vs Revenue (bubble size = conversions)",
+        )
+        scatter.update_layout(height=420, legend_title_text="Channel")
         st.plotly_chart(scatter, use_container_width=True)
 
-    # ── Row 3 — Monthly trend + heatmap ───────────────────────────────────────
-    m = filt.assign(month=filt["Date"].dt.to_period("M").dt.to_timestamp())
-    monthly = m.groupby("month", as_index=False).agg(
-        Spend=("Spend", "sum"), Revenue=("Revenue", "sum")
-    )
-    trend = go.Figure()
-    trend.add_trace(go.Scatter(
-        x=monthly["month"], y=monthly["Spend"], name="Spend",
-        line=dict(color=PALETTE[0], width=2), yaxis="y1",
-    ))
-    trend.add_trace(go.Scatter(
-        x=monthly["month"], y=monthly["Revenue"], name="Revenue",
-        line=dict(color=PALETTE[1], width=2), yaxis="y2",
-    ))
-    trend.update_layout(
-        title="Monthly spend vs revenue", height=420,
-        yaxis=dict(title="Spend ($)", side="left", showgrid=False),
-        yaxis2=dict(title="Revenue ($)", overlaying="y", side="right", showgrid=False),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
+    # ── Tab 2: Channels & Segments ───────────────────────────────────────────
+    with tab_channels:
+        st.caption("Compare channels and audience segments to see where ROI is strongest.")
 
-    heat = (
-        filt.groupby(["Customer_Segment", "Channel_Used"], as_index=False)
-        .agg(roi=("ROI", "mean"))
-        .pivot(index="Customer_Segment", columns="Channel_Used", values="roi")
-    )
-    heatmap = px.imshow(
-        heat, aspect="auto", color_continuous_scale=PALETTE,
-        title="Average campaign ROI index by segment × channel",
-        labels=dict(x="Channel", y="Segment", color="Avg ROI"),
-    )
-    heatmap.update_layout(height=420)
+        sort_metric = st.radio(
+            "Rank channels by", ["ROI %", "Revenue", "Conversion Rate"], horizontal=True,
+        )
+        metric_map = {"ROI %": "ROI_pct", "Revenue": "Revenue", "Conversion Rate": "Conv_rate"}
+        cm_sorted = cm.sort_values(metric_map[sort_metric], ascending=True)
+        roi_bar = px.bar(
+            cm_sorted, x=metric_map[sort_metric], y="Channel_Used", orientation="h",
+            color=metric_map[sort_metric], color_continuous_scale=PALETTE,
+            title=f"Channel ranking by {sort_metric}",
+            labels={metric_map[sort_metric]: sort_metric, "Channel_Used": "Channel"},
+        )
+        roi_bar.update_layout(height=420, showlegend=False)
+        st.plotly_chart(roi_bar, use_container_width=True)
 
-    c31, c32 = st.columns(2)
-    with c31:
-        st.plotly_chart(trend, use_container_width=True)
-    with c32:
+        heat = (
+            filt.groupby(["Customer_Segment", "Channel_Used"], as_index=False)
+            .agg(roi=("ROI", "mean"))
+            .pivot(index="Customer_Segment", columns="Channel_Used", values="roi")
+        )
+        heatmap = px.imshow(
+            heat, aspect="auto", color_continuous_scale=PALETTE,
+            title="Average campaign ROI by segment × channel",
+            labels=dict(x="Channel", y="Segment", color="Avg ROI"),
+        )
+        heatmap.update_layout(height=420)
         st.plotly_chart(heatmap, use_container_width=True)
 
-    # ── Row 4 — Budget optimization + top campaigns ────────────────────────────
-    bud, _, projected, lift = budget_recommendation(filt)
-    bud_plot = go.Figure()
-    bud_plot.add_trace(go.Bar(
-        name="Current %", x=bud["Channel_Used"],
-        y=bud["current_pct"] * 100, marker_color=PALETTE[2],
-    ))
-    bud_plot.add_trace(go.Bar(
-        name="Recommended %", x=bud["Channel_Used"],
-        y=bud["recommended_pct"] * 100, marker_color=PALETTE[3],
-    ))
-    bud_plot.update_layout(
-        barmode="group",
-        title="Budget mix: current vs efficiency-weighted recommendation",
-        yaxis_title="Share of spend (%)", xaxis_title="Channel",
-        height=420, legend=dict(orientation="h", y=1.05),
-    )
+    # ── Tab 3: Budget Optimization ───────────────────────────────────────────
+    with tab_budget:
+        st.caption(
+            "Efficiency-weighted reallocation model — same total budget, redistributed toward "
+            "higher-return channels. Assumes each channel's revenue-per-dollar holds steady as spend shifts."
+        )
+        bud, _, projected, lift = budget_recommendation(filt)
+        bud_plot = go.Figure()
+        bud_plot.add_trace(go.Bar(
+            name="Current %", x=bud["Channel_Used"], y=bud["current_pct"] * 100, marker_color=PALETTE[2],
+        ))
+        bud_plot.add_trace(go.Bar(
+            name="Recommended %", x=bud["Channel_Used"], y=bud["recommended_pct"] * 100, marker_color=PALETTE[3],
+        ))
+        bud_plot.update_layout(
+            barmode="group",
+            title="Budget mix: current vs efficiency-weighted recommendation",
+            yaxis_title="Share of spend (%)", xaxis_title="Channel",
+            height=420, legend=dict(orientation="h", y=1.05),
+        )
+        b1, b2 = st.columns([3, 1])
+        with b1:
+            st.plotly_chart(bud_plot, use_container_width=True)
+        with b2:
+            st.metric(
+                "Projected revenue lift", f"{lift:+.2f}%",
+                help="If spend were reallocated toward higher-efficiency channels at the same total budget.",
+            )
+            st.metric("Projected revenue", f"${projected:,.0f}")
 
-    top_camps = (
-        filt.groupby(["Campaign_ID", "Campaign_Type", "Channel_Used"], as_index=False)
-        .agg(Revenue=("Revenue", "sum"), Spend=("Spend", "sum"), ROI=("ROI", "mean"))
-        .sort_values("Revenue", ascending=False)
-        .head(15)
-    )
-
-    c41, c42 = st.columns(2)
-    with c41:
-        st.plotly_chart(bud_plot, use_container_width=True)
-        st.caption(f"Projected revenue under reallocation: **${projected:,.0f}** (~**{lift:+.1f}%** vs actual).")
-    with c42:
+        top_camps = (
+            filt.groupby(["Campaign_ID", "Campaign_Type", "Channel_Used"], as_index=False)
+            .agg(Revenue=("Revenue", "sum"), Spend=("Spend", "sum"), ROI=("ROI", "mean"))
+            .sort_values("Revenue", ascending=False)
+            .head(15)
+        )
         st.subheader("Top campaigns by revenue")
         st.dataframe(top_camps, use_container_width=True, hide_index=True)
+
+        csv_bytes = filt.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "⬇️ Download filtered data as CSV",
+            data=csv_bytes,
+            file_name="campaigniq_filtered.csv",
+            mime="text/csv",
+        )
 
 
 if __name__ == "__main__":
